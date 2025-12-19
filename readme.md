@@ -1,4 +1,4 @@
-## About Ultimate POS
+## About ERP-Claud
 
 ERP-Claud POS is a POS application updated by ENG Mahmoud salem Mohamed.
 
