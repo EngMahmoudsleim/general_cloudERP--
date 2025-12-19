@@ -1,0 +1,14 @@
+{
+    "name": "InventoryReset",
+    "alias": "inventoryreset",
+    "description": "Inventory Reset Management Module for UltimatePOS - Reset all inventory quantities to zero with just a few clicks",
+    "keywords": ["inventory", "reset", "management", "stock", "ultimatepos"],
+    "active": 1,
+    "order": 0,
+    "providers": [
+        "Modules\\InventoryReset\\Providers\\InventoryResetServiceProvider"
+    ],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

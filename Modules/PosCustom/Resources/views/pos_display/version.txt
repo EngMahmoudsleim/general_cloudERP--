@@ -1,0 +1,4 @@
+Working with messages, testing to get the entire size of the slider in the div
+index.blade_2025-03-24
+Working with the new ver UPOS 6.10
+index.blade_2025-11-27

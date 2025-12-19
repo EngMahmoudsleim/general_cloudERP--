@@ -1,0 +1,12 @@
+{
+    "name": "ExchangeItem",
+    "alias": "exchangeitem",
+    "description": "ExchangeItem Module for Ultimate POS",
+    "keywords": [],
+    "active": 1,
+    "priority": 0,
+    "providers": ["Modules\\ExchangeItem\\Providers\\ExchangeItemServiceProvider"],
+    "aliases": {},
+    "files": [],
+    "requires": []
+}

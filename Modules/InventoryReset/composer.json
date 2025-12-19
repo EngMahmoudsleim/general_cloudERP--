@@ -1,0 +1,42 @@
+{
+    "name": "ultimatepos/inventoryreset",
+    "description": "Inventory Reset Management Module for UltimatePOS - Reset all inventory quantities to zero quickly and easily",
+    "version": "2.0.9",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Jalal",
+            "email": "horizonsoft.group@gmail.com",
+            "role": "Creator/Author"
+        },
+        {
+            "name": "Hero",
+            "role": "Contributor (UI Enhancements, Formatting Fixes, Localization)"
+        },
+        {
+            "name": "Andy",
+            "role": "Contributor (Critical role in architecting the storage logic, Other fixes and improvements)"
+        }
+    ],
+    "keywords": ["inventory", "reset", "management", "stock", "ultimatepos"],
+    "license": "MIT",
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\InventoryReset\\Providers\\InventoryResetServiceProvider"
+            ],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\InventoryReset\\": ""
+        }
+    },
+    "require": {
+        "php": "^8.1",
+        "laravel/framework": "^10.0|^11.0"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
