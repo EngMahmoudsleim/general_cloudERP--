@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Modules\Accounting\Entities\AccountingAccountsTransaction;
 use Modules\Accounting\Entities\AccountingAccTransMapping;
 use Modules\Accounting\Utils\AccountingUtil;
+use Modules\Accounting\Utils\AccountingValidator;
 use Yajra\DataTables\Facades\DataTables;
 
 class JournalEntryController extends Controller
@@ -144,8 +145,8 @@ class JournalEntryController extends Controller
         }
 
         try {
-            DB::beginTransaction();
-
+            $validator = new AccountingValidator();
+            $strict = $validator->isStrictMode($business_id);
             $user_id = request()->session()->get('user.id');
 
             $account_ids = $request->get('account_id');
@@ -153,61 +154,93 @@ class JournalEntryController extends Controller
             $debits = $request->get('debit');
             $journal_date = $request->get('journal_date');
 
-            $accounting_settings = $this->accountingUtil->getAccountingSettings($business_id);
-
-            $ref_no = $request->get('ref_no');
-            $ref_count = $this->util->setAndGetReferenceCount('journal_entry');
-            if (empty($ref_no)) {
-                $prefix = ! empty($accounting_settings['journal_entry_prefix']) ?
-                $accounting_settings['journal_entry_prefix'] : '';
-
-                //Generate reference number
-                $ref_no = $this->util->generateReferenceNumber('journal_entry', $ref_count, $business_id, $prefix);
+            $invalidAccounts = $validator->validateAccountsActive($business_id, $account_ids ?? []);
+            if (!empty($invalidAccounts) && $strict) {
+                throw new \Exception(__('accounting::lang.mapping_required_error'));
             }
 
-            $acc_trans_mapping = new AccountingAccTransMapping();
-            $acc_trans_mapping->business_id = $business_id;
-            $acc_trans_mapping->ref_no = $ref_no;
-            $acc_trans_mapping->note = $request->get('note');
-            $acc_trans_mapping->type = 'journal_entry';
-            $acc_trans_mapping->created_by = $user_id;
-            $acc_trans_mapping->operation_date = $this->util->uf_date($journal_date, true);
-            $acc_trans_mapping->save();
-
-            //save details in account trnsactions table
+            $lines = [];
             foreach ($account_ids as $index => $account_id) {
-                if (! empty($account_id)) {
-                    $transaction_row = [];
-                    $transaction_row['accounting_account_id'] = $account_id;
-
-                    if (! empty($credits[$index])) {
-                        $transaction_row['amount'] = $credits[$index];
-                        $transaction_row['type'] = 'credit';
-                    }
-
-                    if (! empty($debits[$index])) {
-                        $transaction_row['amount'] = $debits[$index];
-                        $transaction_row['type'] = 'debit';
-                    }
-
-                    $transaction_row['created_by'] = $user_id;
-                    $transaction_row['operation_date'] = $this->util->uf_date($journal_date, true);
-                    $transaction_row['sub_type'] = 'journal_entry';
-                    $transaction_row['acc_trans_mapping_id'] = $acc_trans_mapping->id;
-
-                    $accounts_transactions = new AccountingAccountsTransaction();
-                    $accounts_transactions->fill($transaction_row);
-                    $accounts_transactions->save();
+                if (empty($account_id)) {
+                    continue;
                 }
+                $line = ['type' => null, 'amount' => 0, 'accounting_account_id' => $account_id];
+                if (! empty($credits[$index])) {
+                    $line['amount'] = $credits[$index];
+                    $line['type'] = 'credit';
+                }
+
+                if (! empty($debits[$index])) {
+                    $line['amount'] = $debits[$index];
+                    $line['type'] = 'debit';
+                }
+                $lines[] = $line;
             }
 
-            DB::commit();
+            $balanceCheck = $validator->validateBalancePayload($lines);
+            if (!$balanceCheck['balanced'] && $strict) {
+                throw new \Exception(__('accounting::lang.balance_error'));
+            }
+
+            DB::transaction(function () use ($business_id, $request, $account_ids, $credits, $debits, $journal_date, $user_id, $validator, $strict) {
+                $accounting_settings = $this->accountingUtil->getAccountingSettings($business_id);
+
+                $ref_no = $request->get('ref_no');
+                $ref_count = $this->util->setAndGetReferenceCount('journal_entry');
+                if (empty($ref_no)) {
+                    $prefix = ! empty($accounting_settings['journal_entry_prefix']) ?
+                    $accounting_settings['journal_entry_prefix'] : '';
+
+                    //Generate reference number
+                    $ref_no = $this->util->generateReferenceNumber('journal_entry', $ref_count, $business_id, $prefix);
+                }
+
+                $acc_trans_mapping = new AccountingAccTransMapping();
+                $acc_trans_mapping->business_id = $business_id;
+                $acc_trans_mapping->ref_no = $ref_no;
+                $acc_trans_mapping->note = $request->get('note');
+                $acc_trans_mapping->type = 'journal_entry';
+                $acc_trans_mapping->created_by = $user_id;
+                $acc_trans_mapping->operation_date = $this->util->uf_date($journal_date, true);
+                $acc_trans_mapping->save();
+
+                //save details in account trnsactions table
+                foreach ($account_ids as $index => $account_id) {
+                    if (! empty($account_id)) {
+                        $transaction_row = [];
+                        $transaction_row['accounting_account_id'] = $account_id;
+
+                        if (! empty($credits[$index])) {
+                            $transaction_row['amount'] = $credits[$index];
+                            $transaction_row['type'] = 'credit';
+                        }
+
+                        if (! empty($debits[$index])) {
+                            $transaction_row['amount'] = $debits[$index];
+                            $transaction_row['type'] = 'debit';
+                        }
+
+                        $transaction_row['created_by'] = $user_id;
+                        $transaction_row['operation_date'] = $this->util->uf_date($journal_date, true);
+                        $transaction_row['sub_type'] = 'journal_entry';
+                        $transaction_row['acc_trans_mapping_id'] = $acc_trans_mapping->id;
+
+                        $accounts_transactions = new AccountingAccountsTransaction();
+                        $accounts_transactions->fill($transaction_row);
+                        $accounts_transactions->save();
+                    }
+                }
+
+                $persistedBalance = $validator->validateBalancePersisted($acc_trans_mapping->id);
+                if ($strict && !$persistedBalance['balanced']) {
+                    throw new \Exception(__('accounting::lang.balance_error'));
+                }
+            });
 
             $output = ['success' => 1,
                 'msg' => __('lang_v1.added_success'),
             ];
         } catch (\Exception $e) {
-            DB::rollBack();
             \Log::emergency('File:'.$e->getFile().'Line:'.$e->getLine().'Message:'.$e->getMessage());
 
             $output = ['success' => 0,

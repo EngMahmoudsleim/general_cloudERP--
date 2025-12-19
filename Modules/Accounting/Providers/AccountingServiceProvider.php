@@ -62,6 +62,9 @@ class AccountingServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(
             __DIR__.'/../Config/config.php', 'accounting'
         );
+        $this->mergeConfigFrom(
+            __DIR__.'/../Config/required_mappings.php', 'accounting.required_mappings'
+        );
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Modules\Accounting\Listeners;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use App\BusinessLocation;
+use App\Utils\Util;
 
 class MapExpenseTransactions
 {
@@ -26,6 +27,11 @@ class MapExpenseTransactions
      */
     public function handle($event)
     {
+        $util = new Util();
+        if (!$util->isModuleEnabled('account') || !$util->isModuleEnabled('expenses')) {
+            return;
+        }
+
         $business_location = BusinessLocation::find($event->expense->location_id);
         $accounting_default_map = json_decode($business_location->accounting_default_map, true);
         // if expense category is selected
@@ -56,8 +62,13 @@ class MapExpenseTransactions
                 $id = $event->expense->id;
                 $user_id = request()->session()->get('user.id');
                 $business_id = $event->expense->business_id;
+                $context = [
+                    'location_id' => $event->expense->location_id,
+                    'default_map' => $accounting_default_map['expense_'.$event->expense->expense_category_id] ?? ($accounting_default_map['expense'] ?? []),
+                    'transaction' => $event->expense,
+                ];
                 $accountingUtil = new \Modules\Accounting\Utils\AccountingUtil();
-                $accountingUtil->saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account);
+                $accountingUtil->saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account, null, $context);
             }
         }
     }

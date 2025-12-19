@@ -6,6 +6,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use App\BusinessLocation;
 use App\Transaction;
+use App\Utils\Util;
 
 class MapPaymentTransaction
 {
@@ -27,6 +28,10 @@ class MapPaymentTransaction
      */
     public function handle($event)
     {
+        $util = new Util();
+        if (!$util->isModuleEnabled('account')) {
+            return;
+        }
         $payment = $event->transactionPayment;
         
         //if payment is deleted then delete the mapping
@@ -44,8 +49,14 @@ class MapPaymentTransaction
 
         if($transaction->type == 'purchase'){
             $type = 'purchase_payment';
+            if (!$util->isModuleEnabled('purchases')) {
+                return;
+            }
         } elseif($transaction->type == 'sell'){
             $type = 'sell_payment';
+            if (!$util->isModuleEnabled('sales')) {
+                return;
+            }
         } else {
             return;
         }
@@ -66,9 +77,14 @@ class MapPaymentTransaction
                 $payment_id = $payment->id;
                 $user_id = request()->session()->get('user.id');
                 $business_id = $transaction->business_id;
+                $context = [
+                    'location_id' => $transaction->location_id,
+                    'default_map' => $accounting_default_map[$type] ?? [],
+                    'transaction' => $transaction,
+                ];
                 
                 $accountingUtil = new \Modules\Accounting\Utils\AccountingUtil();
-                $accountingUtil->saveMap($type, $payment_id, $user_id, $business_id, $deposit_to, $payment_account);
+                $accountingUtil->saveMap($type, $payment_id, $user_id, $business_id, $deposit_to, $payment_account, null, $context);
             }
         }
     }

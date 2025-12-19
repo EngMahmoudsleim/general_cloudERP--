@@ -8,6 +8,7 @@ use App\TransactionPayment;
 use App\Utils\Util;
 use DB;
 use Modules\Accounting\Entities\AccountingAccountsTransaction;
+use Modules\Accounting\Utils\AccountingValidator;
 
 class AccountingUtil extends Util
 {
@@ -160,9 +161,40 @@ class AccountingUtil extends Util
     /**
      * Function to save a mapping
      */
-    public function saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account, $note = null){
+    public function saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account, $note = null, $context = []){
+        $validator = new AccountingValidator();
+        $strict = $validator->isStrictMode($business_id);
+        $default_map = $context['default_map'] ?? [];
+        $location_id = $context['location_id'] ?? null;
+        $transaction = $context['transaction'] ?? null;
+
+        // backfill default map keys for validation
+        $default_map = array_merge($default_map, [
+            'deposit_to' => $deposit_to,
+            'payment_account' => $payment_account,
+        ]);
+
+        $docContext = [
+            'doc_type' => $type,
+            'doc_id' => $id,
+            'transaction' => $transaction,
+            'purchase_variant' => $context['purchase_variant'] ?? null,
+        ];
+
+        $requiredCheck = $validator->validateRequiredMappingKeys($type, $business_id, $location_id, $default_map, $docContext, $strict);
+        if (!empty($requiredCheck['missing_keys']) || !empty($requiredCheck['invalid_accounts'])) {
+            if ($strict) {
+                throw new \Exception(__('accounting::lang.mapping_required_error'));
+            } else {
+                return [
+                    'success' => false,
+                    'warnings' => $requiredCheck,
+                ];
+            }
+        }
+
         if ($type == 'sell') {
-            $transaction = Transaction::where('business_id', $business_id)->where('id', $id)->firstorFail();
+            $transaction = $transaction ?? Transaction::where('business_id', $business_id)->where('id', $id)->firstorFail();
 
             //$payment_account will increase = sales = credit
             $payment_data = [
@@ -223,7 +255,7 @@ class AccountingUtil extends Util
                 'operation_date' => \Carbon::now(),
             ];
         } elseif ($type == 'purchase') {
-            $transaction = Transaction::where('business_id', $business_id)->where('id', $id)->firstorFail();
+            $transaction = $transaction ?? Transaction::where('business_id', $business_id)->where('id', $id)->firstorFail();
 
             //$payment_account will increase = sales = credit
             $payment_data = [
@@ -253,7 +285,7 @@ class AccountingUtil extends Util
                 'operation_date' => \Carbon::now(),
             ];
         }elseif ($type == 'expense') {
-            $transaction = Transaction::where('business_id', $business_id)->where('id', $id)->firstorFail();            
+            $transaction = $transaction ?? Transaction::where('business_id', $business_id)->where('id', $id)->firstorFail();            
             $payment_data = [
                 'accounting_account_id' => $payment_account,
                 'transaction_id' => $id,
@@ -279,9 +311,48 @@ class AccountingUtil extends Util
                 'created_by' => $user_id,
                 'operation_date' => \Carbon::now(),
             ];
+        } else {
+            return ['success' => false, 'warnings' => ['unknown_operation' => $type]];
         }
 
-        AccountingAccountsTransaction::updateOrCreateMapTransaction($payment_data);
-        AccountingAccountsTransaction::updateOrCreateMapTransaction($deposit_data);
+        $payloadBalance = $validator->validateBalancePayload([$payment_data, $deposit_data]);
+        if (!$payloadBalance['balanced']) {
+            if ($strict) {
+                throw new \Exception(__('accounting::lang.balance_error'));
+            } else {
+                $validator->logWarning($business_id, $type, $type, $id, ['missing_keys' => [], 'invalid_accounts' => []], $strict);
+                return ['success' => false, 'warnings' => ['balance' => $payloadBalance]];
+            }
+        }
+
+        DB::transaction(function () use ($payment_data, $deposit_data, $type, $id, $validator, $strict) {
+            AccountingAccountsTransaction::updateOrCreateMapTransaction($payment_data);
+            AccountingAccountsTransaction::updateOrCreateMapTransaction($deposit_data);
+
+            // Post insert balance check on persisted records for this transaction/payment context
+            $query = AccountingAccountsTransaction::whereIn('map_type', ['payment_account', 'deposit_to']);
+
+            if (in_array($type, ['sell', 'purchase', 'expense'])) {
+                $query->where('transaction_id', $id);
+            } else {
+                $query->where('transaction_payment_id', $id);
+            }
+
+            $row = $query->select(
+                DB::raw("SUM(CASE WHEN type='debit' THEN amount ELSE 0 END) as debits"),
+                DB::raw("SUM(CASE WHEN type='credit' THEN amount ELSE 0 END) as credits")
+            )->first();
+
+            $balanced = $validator->validateBalancePayload([
+                ['type' => 'debit', 'amount' => (float) ($row->debits ?? 0)],
+                ['type' => 'credit', 'amount' => (float) ($row->credits ?? 0)],
+            ]);
+
+            if ($strict && !$balanced['balanced']) {
+                throw new \Exception(__('accounting::lang.balance_error'));
+            }
+        });
+
+        return ['success' => true];
     }
 }
