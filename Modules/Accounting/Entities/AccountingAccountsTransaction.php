@@ -51,5 +51,7 @@ class AccountingAccountsTransaction extends Model
                 'type' => $data['type'], 'sub_type' => $data['sub_type'], 'created_by' => $data['created_by'], 'operation_date' => $data['operation_date'], 'note' => $data['note']
             ]
         );
+
+        return $transaction;
     }
 }

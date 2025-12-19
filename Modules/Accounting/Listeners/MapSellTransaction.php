@@ -6,6 +6,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use App\Events\SellCreatedOrModified;
 use App\BusinessLocation;
+use App\Utils\Util;
 
 class MapSellTransaction
 {
@@ -27,6 +28,11 @@ class MapSellTransaction
      */
     public function handle(SellCreatedOrModified $event)
     {
+        $util = new Util();
+        if (!$util->isModuleEnabled('account') || !$util->isModuleEnabled('sales')) {
+            return;
+        }
+
         //get location setting and check if default is set or not, if set the proceed.
         $business_location = BusinessLocation::find($event->transaction->location_id);
         $accounting_default_map = json_decode($business_location->accounting_default_map, true);
@@ -46,9 +52,14 @@ class MapSellTransaction
                 $id = $event->transaction->id;
                 $user_id = request()->session()->get('user.id');
                 $business_id = $event->transaction->business_id;
+                $context = [
+                    'location_id' => $event->transaction->location_id,
+                    'default_map' => $accounting_default_map['sale'] ?? [],
+                    'transaction' => $event->transaction,
+                ];
                 
                 $accountingUtil = new \Modules\Accounting\Utils\AccountingUtil();
-                $accountingUtil->saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account);
+                $accountingUtil->saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account, null, $context);
             }
         }
     }
