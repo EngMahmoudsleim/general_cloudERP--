@@ -4,6 +4,7 @@ namespace Modules\Accounting\Providers;
 
 use Illuminate\Database\Eloquent\Factory;
 use Illuminate\Support\ServiceProvider;
+use Modules\Accounting\Console\BootstrapAccountingMappings;
 
 class AccountingServiceProvider extends ServiceProvider
 {
@@ -47,6 +48,12 @@ class AccountingServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->register(RouteServiceProvider::class);
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                BootstrapAccountingMappings::class,
+            ]);
+        }
     }
 
     /**
