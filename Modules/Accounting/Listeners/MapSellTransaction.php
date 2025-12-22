@@ -7,6 +7,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use App\Events\SellCreatedOrModified;
 use App\BusinessLocation;
 use App\Utils\Util;
+use Illuminate\Support\Facades\Log;
+use Modules\Accounting\Utils\AccountingValidator;
+use Modules\Accounting\Utils\PostingEngine;
 
 class MapSellTransaction
 {
@@ -61,6 +64,27 @@ class MapSellTransaction
                 $accountingUtil = new \Modules\Accounting\Utils\AccountingUtil();
                 $accountingUtil->saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account, null, $context);
             }
+        }
+
+        if (($event->transaction->status ?? null) !== 'final') {
+            return;
+        }
+
+        $validator = new AccountingValidator();
+        $strict = $validator->isStrictMode((int) $event->transaction->business_id);
+
+        try {
+            (new PostingEngine())->postSellInvoice($event->transaction);
+        } catch (\Throwable $e) {
+            if ($strict) {
+                throw $e;
+            }
+
+            Log::warning('Accounting sell posting failed', [
+                'business_id' => $event->transaction->business_id,
+                'transaction_id' => $event->transaction->id,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 }

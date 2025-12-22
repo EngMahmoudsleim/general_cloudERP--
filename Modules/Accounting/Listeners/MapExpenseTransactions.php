@@ -6,6 +6,9 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use App\BusinessLocation;
 use App\Utils\Util;
+use Illuminate\Support\Facades\Log;
+use Modules\Accounting\Utils\AccountingValidator;
+use Modules\Accounting\Utils\PostingEngine;
 
 class MapExpenseTransactions
 {
@@ -70,6 +73,27 @@ class MapExpenseTransactions
                 $accountingUtil = new \Modules\Accounting\Utils\AccountingUtil();
                 $accountingUtil->saveMap($type, $id, $user_id, $business_id, $deposit_to, $payment_account, null, $context);
             }
+        }
+
+        if (($event->expense->status ?? null) !== 'final') {
+            return;
+        }
+
+        $validator = new AccountingValidator();
+        $strict = $validator->isStrictMode((int) $event->expense->business_id);
+
+        try {
+            (new PostingEngine())->postExpense($event->expense);
+        } catch (\Throwable $e) {
+            if ($strict) {
+                throw $e;
+            }
+
+            Log::warning('Accounting expense posting failed', [
+                'business_id' => $event->expense->business_id,
+                'transaction_id' => $event->expense->id,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 }
