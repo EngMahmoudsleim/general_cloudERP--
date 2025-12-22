@@ -7,6 +7,9 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use App\BusinessLocation;
 use App\Transaction;
 use App\Utils\Util;
+use Illuminate\Support\Facades\Log;
+use Modules\Accounting\Utils\AccountingValidator;
+use Modules\Accounting\Utils\PostingEngine;
 
 class MapPaymentTransaction
 {
@@ -46,6 +49,9 @@ class MapPaymentTransaction
         }
 
         $transaction = Transaction::find($payment->transaction_id);
+        if (empty($transaction)) {
+            return;
+        }
 
         if($transaction->type == 'purchase'){
             $type = 'purchase_payment';
@@ -86,6 +92,31 @@ class MapPaymentTransaction
                 $accountingUtil = new \Modules\Accounting\Utils\AccountingUtil();
                 $accountingUtil->saveMap($type, $payment_id, $user_id, $business_id, $deposit_to, $payment_account, null, $context);
             }
+        }
+
+        $validator = new AccountingValidator();
+        $businessId = (int) ($payment->business_id ?? $transaction->business_id ?? 0);
+        $strict = $validator->isStrictMode($businessId);
+
+        $postingEngine = new PostingEngine();
+
+        try {
+            if ($type === 'sell_payment' && ($transaction->status ?? null) === 'final') {
+                $postingEngine->postSellPayment($payment);
+            } elseif ($type === 'purchase_payment' && ($transaction->status ?? null) === 'received') {
+                $postingEngine->postPurchasePayment($payment);
+            }
+        } catch (\Throwable $e) {
+            if ($strict) {
+                throw $e;
+            }
+
+            Log::warning('Accounting payment posting failed', [
+                'business_id' => $businessId,
+                'transaction_id' => $transaction->id,
+                'payment_id' => $payment->id,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 }
