@@ -40,6 +40,9 @@ class AccountingController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        $canManageMappings = auth()->user()->can('accounting.map_transactions') &&
+            $this->moduleUtil->hasThePermissionInSubscription($business_id, 'accounting_module');
+
         $start_date = request()->get('start_date', session()->get('financial_year.start'));
         $end_date = request()->get('end_date', session()->get('financial_year.end'));
         $balance_formula = $this->accountingUtil->balanceFormula();
@@ -133,7 +136,7 @@ class AccountingController extends Controller
         }
 
         return view('accounting::accounting.dashboard')->with(compact('coa_overview_chart',
-                'all_charts', 'coa_overview', 'account_types', 'end_date', 'start_date'));
+                'all_charts', 'coa_overview', 'account_types', 'end_date', 'start_date', 'canManageMappings'));
     }
 
     private function __chartOptions()
