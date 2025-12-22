@@ -90,7 +90,7 @@
                     @endforeach
                 </ul>
                 <div class="tab-content">
-                    {!! Form::open(['id' => 'mapping-form', 'method' => 'post', 'action' => action([\Modules\Accounting\Http\Controllers\MappingController::class, 'store'])]) !!}
+                    {!! Form::open(['id' => 'mapping-form', 'method' => 'post', 'route' => 'accounting.mappings.store']) !!}
                         @csrf
                         {!! Form::hidden('location_id', $locationId) !!}
                         @foreach($groups as $group => $keys)
