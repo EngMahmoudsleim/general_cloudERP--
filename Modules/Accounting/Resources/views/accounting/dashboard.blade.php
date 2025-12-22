@@ -20,6 +20,33 @@
                 </div>
             </div>
         </div>
+
+        @if(!empty($canManageMappings))
+        <div class="row">
+            <div class="col-md-12">
+                <div class="box box-solid box-info">
+                    <div class="box-body">
+                        <div class="row">
+                            <div class="col-sm-9">
+                                <h4 class="box-title" style="margin-top: 5px;">
+                                    <i class="fas fa-project-diagram"></i> Accounting Mappings
+                                </h4>
+                                <p class="text-muted" style="margin-bottom: 0;">
+                                    Configure account mappings for posting rules and payment methods.
+                                </p>
+                            </div>
+                            <div class="col-sm-3 text-right">
+                                <a href="{{ action([\Modules\Accounting\Http\Controllers\MappingController::class, 'index']) }}" class="btn btn-primary">
+                                    <i class="fas fa-cog"></i> Accounting Mappings
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
         <div class="row">
             <div class="col-md-12">
                 @component('components.widget', ['class' => 'box-primary', 

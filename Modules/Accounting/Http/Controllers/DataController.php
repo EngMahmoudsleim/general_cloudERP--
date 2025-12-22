@@ -43,18 +43,47 @@ class DataController extends Controller
         if (auth()->user()->can('accounting.access_accounting_module') && $is_accounting_enabled) {
             Menu::modify(
                 'admin-sidebar-menu',
-                function ($menu) {
-                    $menu->url(action([\Modules\Accounting\Http\Controllers\AccountingController::class, 'dashboard']), __('accounting::lang.accounting'), ['icon' => '<svg aria-hidden="true" class="tw-size-5 tw-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                    <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                    <path d="M3 21l18 0"></path>
-                    <path d="M3 10l18 0"></path>
-                    <path d="M5 6l7 -3l7 3"></path>
-                    <path d="M4 10l0 11"></path>
-                    <path d="M20 10l0 11"></path>
-                    <path d="M8 14l0 3"></path>
-                    <path d="M12 14l0 3"></path>
-                    <path d="M16 14l0 3"></path>
-                  </svg>', 'style' => config('app.env') == 'demo' ? 'background-color: #D483D9;color:white' : '', 'active' => request()->segment(1) == 'accounting'])->order(50);
+                function ($menu) use ($module_util, $business_id) {
+                    $menu->dropdown(
+                        __('accounting::lang.accounting'),
+                        function ($sub) use ($module_util, $business_id) {
+                            $sub->url(
+                                action([\Modules\Accounting\Http\Controllers\AccountingController::class, 'dashboard']),
+                                __('accounting::lang.dashboard') !== 'accounting::lang.dashboard' ? __('accounting::lang.dashboard') : __('accounting::lang.accounting'),
+                                [
+                                    'icon' => '',
+                                    'active' => request()->segment(1) == 'accounting' && in_array(request()->segment(2), [null, 'dashboard']),
+                                ]
+                            );
+
+                            if (auth()->user()->can('accounting.map_transactions') &&
+                                $module_util->hasThePermissionInSubscription($business_id, 'accounting_module')) {
+                                $sub->url(
+                                    action([\Modules\Accounting\Http\Controllers\MappingController::class, 'index']),
+                                    'Accounting Mappings',
+                                    [
+                                        'icon' => '',
+                                        'active' => request()->segment(1) == 'accounting' && request()->segment(2) == 'mappings',
+                                    ]
+                                );
+                            }
+                        },
+                        [
+                            'icon' => '<svg aria-hidden="true" class="tw-size-5 tw-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                            <path d="M3 21l18 0"></path>
+                            <path d="M3 10l18 0"></path>
+                            <path d="M5 6l7 -3l7 3"></path>
+                            <path d="M4 10l0 11"></path>
+                            <path d="M20 10l0 11"></path>
+                            <path d="M8 14l0 3"></path>
+                            <path d="M12 14l0 3"></path>
+                            <path d="M16 14l0 3"></path>
+                          </svg>',
+                            'style' => config('app.env') == 'demo' ? 'background-color: #D483D9;color:white' : '',
+                            'active' => request()->segment(1) == 'accounting',
+                        ]
+                    )->order(50);
                 }
             );
         }
